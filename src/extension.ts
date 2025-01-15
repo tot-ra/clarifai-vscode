@@ -43,20 +43,22 @@ export function activate(context: vscode.ExtensionContext) {
 		}));
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand('clarifai.addImageToClarifai', async (uri: vscode.Uri) => {
+		vscode.commands.registerCommand('clarifai.addImageToClarifai', async (contextSelection: vscode.Uri, uris: vscode.Uri[]) => {
 			try {
-				// Convert the URI to a file path
-				const imagePath = uri.fsPath;
+				for (const uri of uris) {
+					// Convert the URI to a file path
+					const imagePath = uri.fsPath;
 
-				// Assume the title is derived from the image or context
-				const relFilePath = vscode.workspace.asRelativePath(imagePath);
+					// Assume the title is derived from the image or context
+					const relFilePath = vscode.workspace.asRelativePath(imagePath);
 
-				// Call the function to process and send images to Clarifai
-				await readImagesContentsAndPostToClarifai([imagePath], relFilePath);
+					// Call the function to process and send images to Clarifai
+					await readImagesContentsAndPostToClarifai([imagePath], relFilePath);
 
-				vscode.window.showInformationMessage('Image sent to Clarifai successfully.');
+					vscode.window.showInformationMessage(`Image ${relFilePath} sent to Clarifai successfully.`);
+				}
 			} catch (error) {
-				vscode.window.showErrorMessage(`Failed to send image to Clarifai: ${error}`);
+				vscode.window.showErrorMessage(`Failed to send images to Clarifai: ${error}`);
 			}
 		})
 	);
