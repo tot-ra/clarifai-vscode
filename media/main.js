@@ -32,14 +32,14 @@ window.addEventListener('message', event => {
 	}
 }); 
 
-document.querySelector('.cancel-uploads-button').addEventListener('click', () => {
-	vscode.postMessage({
-		type: 'cancelUploads'
-	});
-}); 
+// document.querySelector('.cancel-uploads-button').addEventListener('click', () => {
+// 	vscode.postMessage({
+// 		type: 'cancelUploads'
+// 	});
+// }); 
 
 // Add event listener for the search button
-document.querySelector('button').addEventListener('click', () => {
+document.getElementById('searchButton').addEventListener('click', () => {
 	const textarea = document.getElementById('rag');
 	const rawText = textarea.value;
 

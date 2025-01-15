@@ -169,8 +169,16 @@ class ClarifaiViewProvider implements vscode.WebviewViewProvider {
 					}
 				case 'searchClarifai':
 					const rawText = data.rawText;
+					let extraContext = '';
+
+					// Check if there is an active text editor
+					if (vscode.window.activeTextEditor) {
+						// Get the text from the active document
+						extraContext = vscode.window.activeTextEditor.document.getText();
+					}
+
 					try {
-						const response = await questionClarifai(rawText);
+						const response = await questionClarifai(rawText, extraContext);
 						vscode.window.showInformationMessage(`Clarifai response: ${response}`);
 						
 						// Send the response back to the webview
@@ -232,14 +240,12 @@ class ClarifaiViewProvider implements vscode.WebviewViewProvider {
 			</head>
 			<body>
 
-				<textarea id="rag" style="width: 400px; height: 300px;" placeholder="Explain this file"></textarea>
+				<textarea id="rag" style="width: 400px; height: 300px;">Explain this file</textarea>
 				<br/>
-				<button id="searchButton">Search</button>
+				<button id="searchButton">Submit</button>
 				
-				<button class="cancel-uploads-button">Cancel uploads</button>
-
 				<!-- New element to display the response -->
-				<div id="responseText" style="margin-top: 10px; font-size: 12px; color: #333;"></div>
+				<div id="responseText"></div>
 
 				<div class="upload-queue" style="font-size: 10px;">
 					${uploadQueue.getQueue().map(filePath => {
@@ -250,9 +256,13 @@ class ClarifaiViewProvider implements vscode.WebviewViewProvider {
 					}).join('')}
 				</div>
 
+				
+
 				<script nonce="${nonce}" src="${scriptUri}"></script>
 			</body>
 			</html>`;
+
+			// <button class="cancel-uploads-button">Cancel uploads</button>
 	}
 }
 
@@ -425,9 +435,9 @@ async function processQueuedFilesContinuously() {
 	}
 }
 
-async function questionClarifai(rawText: string) {
-	const modelId = 'claude-3_5-sonnet';
-
+async function questionClarifai(rawText: string, extraContext: string = '') {
+	// Combine rawText and extraContext
+	const combinedText = `${rawText}\n\nExtra Context:\n${extraContext}`;
 	const config = vscode.workspace.getConfiguration('clarifai-vscode');
     const llm_pat = config.get('LLM_PAT');
 
@@ -440,12 +450,14 @@ async function questionClarifai(rawText: string) {
 			{
 				"data": {
 					"text": {
-						"raw": rawText
+						"raw": combinedText
 					}
 				}
 			}
 		]
 	});
+
+	console.log("raw:", combinedText);
 
 	const requestOptions = {
 		method: 'POST',
@@ -456,7 +468,7 @@ async function questionClarifai(rawText: string) {
 		body: raw
 	};
 
-	const response = await fetch("https://api.clarifai.com/v2/models/" + modelId + "/outputs", requestOptions);
+	const response = await fetch("https://api.clarifai.com/v2/models/claude-3_5-sonnet/outputs", requestOptions);
 	// @ts-ignore
 	const clarifaiData: { status: { code: number }; outputs: any[] } = await response.json();
 
