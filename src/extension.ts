@@ -1,6 +1,11 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 
+// Extracted constants
+const CLARIFAI_API_URL = "https://api.clarifai.com/v2/inputs";
+const IMAGE_EXTENSIONS = ['jpeg', 'jpg', 'png', 'gif', 'bmp'];
+const TEXT_EXTENSIONS = ['yml', 'yaml', 'py', 'go', 'js', 'ts'];
+
 export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('clarifai-vscode.setApiToken', async () => {
@@ -236,7 +241,7 @@ async function sendTextToClarifai (filepath: any, text: any) {
         body: raw
     };
 
-    fetch("https://api.clarifai.com/v2/inputs", requestOptions)
+    fetch(CLARIFAI_API_URL, requestOptions)
         .then(response => response.text())
         .then(result => console.log(result))
         .catch(error => console.log('error', error));
@@ -285,7 +290,7 @@ async function readImagesContentsAndPostToClarifai(imagePaths: any, relFilePath:
                 body: JSON.stringify(raw)
             };
 
-            const response = await fetch("https://api.clarifai.com/v2/inputs", requestOptions);
+            const response = await fetch(CLARIFAI_API_URL, requestOptions);
             const result = await response.json();
 
 			// @ts-ignore
@@ -305,9 +310,9 @@ async function processFolderRecursively(folderPath: string) {
 			await processFolderRecursively(fullPath);
 		} else if (entry.isFile()) {
 			const ext = entry.name.split('.').pop()?.toLowerCase();
-			if (ext && ['jpeg', 'jpg', 'png', 'gif', 'bmp'].includes(ext)) {
+			if (ext && IMAGE_EXTENSIONS.includes(ext)) {
 				await readImagesContentsAndPostToClarifai([fullPath], fullPath);
-			} else if (ext && ['yml', 'yaml', 'py', 'go', 'js', 'ts'].includes(ext)) {
+			} else if (ext && TEXT_EXTENSIONS.includes(ext)) {
 				const textContent = fs.readFileSync(fullPath, 'utf-8');
 				await sendTextToClarifai(fullPath, textContent);
 			}
