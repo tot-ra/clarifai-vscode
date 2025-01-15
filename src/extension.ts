@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 
 export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
@@ -40,8 +41,26 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('calicoColors.clearColors', () => {
 			provider.clearColors();
 		}));
-}
 
+	context.subscriptions.push(
+		vscode.commands.registerCommand('clarifai.addImageToClarifai', async (uri: vscode.Uri) => {
+			try {
+				// Convert the URI to a file path
+				const imagePath = uri.fsPath;
+
+				// Assume the title is derived from the image or context
+				const relFilePath = vscode.workspace.asRelativePath(imagePath);
+
+				// Call the function to process and send images to Clarifai
+				await readImagesContentsAndPostToClarifai([imagePath], relFilePath);
+
+				vscode.window.showInformationMessage('Image sent to Clarifai successfully.');
+			} catch (error) {
+				vscode.window.showErrorMessage(`Failed to send image to Clarifai: ${error}`);
+			}
+		})
+	);
+}
 
 
 class ColorsViewProvider implements vscode.WebviewViewProvider {
@@ -146,4 +165,105 @@ function getNonce() {
 		text += possible.charAt(Math.floor(Math.random() * possible.length));
 	}
 	return text;
+}
+
+
+
+// Function to send data to Clarifai
+async function sendTextToClarifai (id: any, filepath: any, text: any, title: string) {
+    const config = vscode.workspace.getConfiguration('clarifai-vscode');
+    const userId = config.get('USER_ID');
+    const appId = config.get('APP_ID');
+    const pat = config.get('PAT');
+
+    const raw = JSON.stringify({
+        "user_app_id": {
+            "user_id": userId,
+            "app_id": appId
+        },
+        "inputs": [
+            {
+                id,
+                "data": {
+                    text: {
+                        raw: text
+                    },
+
+                    metadata: {
+                        filepath,
+                        title
+                    }
+                }
+            }
+        ]
+    });
+
+    const requestOptions = {
+        method: 'POST',
+        headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Key ' + pat
+        },
+        body: raw
+    };
+
+    fetch("https://api.clarifai.com/v2/inputs", requestOptions)
+        .then(response => response.text())
+        .then(result => console.log(result))
+        .catch(error => console.log('error', error));
+
+    // sleep 100ms to not overwhelm the API
+    await new Promise(r => setTimeout(r, 100));
+
+};
+
+
+
+async function readImagesContentsAndPostToClarifai(imagePaths: any, relFilePath: any) {
+    const config = vscode.workspace.getConfiguration('clarifai-vscode');
+    const pat = config.get('PAT');
+
+    for (const imagePath of imagePaths) {
+        try {
+            const raw: any = {
+                "inputs": [
+                    {
+                        "data": {
+                            metadata: {
+                                "filepath": imagePath
+                            }
+                        }
+                    }
+                ],
+            };
+
+            const imageData = fs.readFileSync(imagePath, { encoding: 'base64' });
+
+            const imageId = require('crypto').createHash('md5')
+                .update(fs.readFileSync(imagePath))
+                .digest('hex');
+
+            raw.inputs[0].id = imageId; // Use imageId instead of docId
+            raw.inputs[0].data.image = {
+                base64: imageData
+            };
+
+            const requestOptions = {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Authorization': 'Key ' + pat
+                },
+                body: JSON.stringify(raw)
+            };
+
+            const response = await fetch("https://api.clarifai.com/v2/inputs", requestOptions);
+            const result = await response.json();
+
+			// @ts-ignore
+			vscode.window.showInformationMessage(result?.status?.details);
+        } catch (error) {
+			vscode.window.showErrorMessage(`Error processing ${relFilePath} : image ${imagePath} ${error}`);
+        }
+    }
 }

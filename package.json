@@ -68,6 +68,11 @@
 				"category": "Calico Colors",
 				"title": "Clear Colors",
 				"icon": "$(clear-all)"
+			},
+			{
+				"command": "clarifai.addImageToClarifai",
+				"category": "Clarifai",
+				"title": "Upload to Clarifai"
 			}
 		],
 		"menus": {
@@ -76,6 +81,13 @@
 					"command": "calicoColors.clearColors",
 					"group": "navigation",
 					"when": "view == calicoColors.colorsView"
+				}
+			],
+			"explorer/context": [
+				{
+					"command": "clarifai.addImageToClarifai",
+					"group": "navigation",
+					"when": "resourceExtname == .jpeg || resourceExtname == .jpg || resourceExtname == .png || resourceExtname == .gif || resourceExtname == .bmp"
 				}
 			]
 		}
