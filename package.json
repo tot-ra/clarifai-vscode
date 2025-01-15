@@ -15,7 +15,27 @@
   "main": "./dist/extension.js",
 
   "contributes": {
-
+  "configuration": {
+      "type": "object",
+      "title": "Clarifai Extension",
+      "properties": {
+        "clarifai-vscode.PAT": {
+          "type": "string",
+          "default": "",
+          "description": "API token for accessing Clarifai API"
+        },
+        "clarifai-vscode.APP_ID": {
+          "type": "string",
+          "default": "",
+          "description": "Application id in Clarifai"
+        },
+        "clarifai-vscode.USER_ID": {
+          "type": "string",
+          "default": "",
+          "description": "User id in Clarifai"
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {

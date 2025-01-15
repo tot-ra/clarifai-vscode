@@ -1,20 +1,15 @@
-# clarifai-vscode README
+# 🌀 clarifai-vscode
 
-This is the README for your extension "clarifai-vscode". After writing up a brief description, we recommend including the following sections.
+This is a hackathon project to build vscode extension that allows integration with Clarifai
 
-## Features
-
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+## Ideas
+- bulk add all of your files to Clarifai
+- selectively add your files to Clarifai inputs without leaving your IDE or writing custom scripts
+- simplistic labeling from within the IDE
+- run code similarity search
+- run RAG with any LLM from Clarifai arsenal to answer questions about your repository
+    - load as much as possible from selected file into the context
+        - use filesystem and recursive import statements to prioritize which files need to be added into context
 
 ## Extension Settings
 

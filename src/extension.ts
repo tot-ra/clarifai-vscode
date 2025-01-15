@@ -1,6 +1,30 @@
 import * as vscode from 'vscode';
 
 export function activate(context: vscode.ExtensionContext) {
+	context.subscriptions.push(
+		vscode.commands.registerCommand('clarifai-vscode.setApiToken', async () => {
+		  const token = await vscode.window.showInputBox({ prompt: 'Enter your API token' });
+		  if (token) {
+			await context.secrets.store('clarifaiApiToken', token);
+			vscode.window.showInformationMessage('API token saved successfully.');
+		  }
+		})
+	  );
+	
+	  // Function to retrieve the token
+	  async function getApiToken(): Promise<string | undefined> {
+		return await context.secrets.get('clarifaiApiToken');
+	  }
+	
+	  // Example usage of the token
+	  async function useApiToken() {
+		const token = await getApiToken();
+		if (token) {
+		  // Use the token for API requests
+		} else {
+		  vscode.window.showErrorMessage('API token not set.');
+		}
+	  }
 
 	const provider = new ColorsViewProvider(context.extensionUri);
 
@@ -18,8 +42,9 @@ export function activate(context: vscode.ExtensionContext) {
 		}));
 }
 
-class ColorsViewProvider implements vscode.WebviewViewProvider {
 
+
+class ColorsViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = 'calicoColors.colorsView';
 
 	private _view?: vscode.WebviewView;
