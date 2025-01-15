@@ -12,20 +12,6 @@ export function activate(context: vscode.ExtensionContext) {
 		})
 	  );
 	
-	  // Function to retrieve the token
-	  async function getApiToken(): Promise<string | undefined> {
-		return await context.secrets.get('clarifaiApiToken');
-	  }
-	
-	  // Example usage of the token
-	  async function useApiToken() {
-		const token = await getApiToken();
-		if (token) {
-		  // Use the token for API requests
-		} else {
-		  vscode.window.showErrorMessage('API token not set.');
-		}
-	  }
 
 	const provider = new ColorsViewProvider(context.extensionUri);
 
@@ -59,6 +45,28 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 			} catch (error) {
 				vscode.window.showErrorMessage(`Failed to send images to Clarifai: ${error}`);
+			}
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('clarifai.addTextToClarifai', async (contextSelection: vscode.Uri, uris: vscode.Uri[]) => {
+			try {
+				let textContent = '';
+				let title = '';
+
+				for (const uri of uris) {
+					const filePath = uri.fsPath;
+					textContent = fs.readFileSync(filePath, 'utf-8');
+					title = vscode.workspace.asRelativePath(filePath);
+					await sendTextToClarifai( 
+						filePath, 
+						textContent
+					);
+					vscode.window.showInformationMessage(`Text from ${title} sent to Clarifai successfully.`);
+				}
+			} catch (error) {
+				vscode.window.showErrorMessage(`Failed to send text to Clarifai: ${error}`);
 			}
 		})
 	);
@@ -172,11 +180,13 @@ function getNonce() {
 
 
 // Function to send data to Clarifai
-async function sendTextToClarifai (id: any, filepath: any, text: any, title: string) {
+async function sendTextToClarifai (filepath: any, text: any) {
     const config = vscode.workspace.getConfiguration('clarifai-vscode');
     const userId = config.get('USER_ID');
     const appId = config.get('APP_ID');
     const pat = config.get('PAT');
+
+	const id = require('crypto').createHash('md5').update(text).digest('hex');
 
     const raw = JSON.stringify({
         "user_app_id": {
@@ -192,8 +202,7 @@ async function sendTextToClarifai (id: any, filepath: any, text: any, title: str
                     },
 
                     metadata: {
-                        filepath,
-                        title
+                        filepath
                     }
                 }
             }
@@ -216,7 +225,6 @@ async function sendTextToClarifai (id: any, filepath: any, text: any, title: str
 
     // sleep 100ms to not overwhelm the API
     await new Promise(r => setTimeout(r, 100));
-
 };
 
 
