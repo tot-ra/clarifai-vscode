@@ -11,22 +11,24 @@ class UploadQueue extends EventEmitter {
 	private queue: string[] = [];
 
 	add(filePath: string) {
-		this.queue.push(filePath);
-		this.emit('update', this.queue.slice(0, 100)); // Emit only the top 100 files
+		// Convert the file path to a relative path before adding to the queue
+		const relativeFilePath = vscode.workspace.asRelativePath(filePath);
+		this.queue.push(relativeFilePath);
+		this.emit('update', this.queue); // Emit the entire queue
 	}
 
 	remove(filePath: string) {
 		this.queue = this.queue.filter(file => file !== filePath);
-		this.emit('update', this.queue.slice(0, 100));
+		this.emit('update', this.queue); // Emit the entire queue
 	}
 
 	getQueue() {
-		return this.queue.slice(0, 100);
+		return this.queue; // Return the entire queue
 	}
 
 	clear() {
 		this.queue = [];
-		this.emit('update', this.queue);
+		this.emit('update', this.queue); // Emit the entire queue
 	}
 }
 
@@ -103,11 +105,12 @@ export function activate(context: vscode.ExtensionContext) {
 				const folderPromises = uris.map(async (uri) => {
 					const stats = fs.statSync(uri.fsPath);
 					if (stats.isDirectory()) {
-						await processFolderRecursively(uri.fsPath);
+						await traverseAndQueueFiles(uri.fsPath);
 					}
 				});
 
 				await Promise.all(folderPromises);
+				await processQueuedFiles();
 				vscode.window.showInformationMessage('Folders uploaded to Clarifai successfully.');
 			} catch (error) {
 				vscode.window.showErrorMessage(`Failed to upload folders to Clarifai: ${error}`);
@@ -174,6 +177,7 @@ class ClarifaiViewProvider implements vscode.WebviewViewProvider {
 
 	public updateQueue(queue: string[]) {
 		if (this._view) {
+			console.log(`Updating view with queue: ${queue.length} files`);
 			this._view.webview.postMessage({ type: 'updateQueue', queue });
 		}
 	}
@@ -344,33 +348,40 @@ async function readImagesContentsAndPostToClarifai(imagePaths: any, relFilePath:
 	}
 }
 
-async function processFolderRecursively(folderPath: string) {
+async function traverseAndQueueFiles(folderPath: string) {
 	const entries = fs.readdirSync(folderPath, { withFileTypes: true });
 
-	// First, add all files to the queue
 	for (const entry of entries) {
 		const fullPath = `${folderPath}/${entry.name}`;
 		if (entry.isDirectory()) {
-			await processFolderRecursively(fullPath);
+			await traverseAndQueueFiles(fullPath);
 		} else if (entry.isFile()) {
 			const ext = entry.name.split('.').pop()?.toLowerCase();
 			if (ext && (IMAGE_EXTENSIONS.includes(ext) || TEXT_EXTENSIONS.includes(ext))) {
+				// slow down the queue is too large
+				if (uploadQueue.getQueue().length >= 500) {
+					console.log('Queue size is 500 or more, pausing traversal...');
+					await new Promise(resolve => setTimeout(resolve, 5000)); // Sleep for 5 seconds
+				}
+
 				uploadQueue.add(fullPath);
+				console.log(`Added to queue: ${fullPath}`);
 			}
 		}
 	}
+}
 
-	// Then, process each file for upload
-	for (const entry of entries) {
-		const fullPath = `${folderPath}/${entry.name}`;
-		if (entry.isFile()) {
-			const ext = entry.name.split('.').pop()?.toLowerCase();
-			if (ext && IMAGE_EXTENSIONS.includes(ext)) {
-				await readImagesContentsAndPostToClarifai([fullPath], fullPath);
-			} else if (ext && TEXT_EXTENSIONS.includes(ext)) {
-				const textContent = fs.readFileSync(fullPath, 'utf-8');
-				await sendTextToClarifai(fullPath, textContent);
-			}
+async function processQueuedFiles() {
+	const queue = uploadQueue.getQueue();
+	console.log(`Processing queue: ${queue.length} files`);
+
+	for (const filePath of queue) {
+		const ext = filePath.split('.').pop()?.toLowerCase();
+		if (ext && IMAGE_EXTENSIONS.includes(ext)) {
+			await readImagesContentsAndPostToClarifai([filePath], filePath);
+		} else if (ext && TEXT_EXTENSIONS.includes(ext)) {
+			const textContent = fs.readFileSync(filePath, 'utf-8');
+			await sendTextToClarifai(filePath, textContent);
 		}
 	}
 }
