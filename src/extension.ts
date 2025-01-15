@@ -70,6 +70,24 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		})
 	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('clarifai.uploadFolderToClarifai', async (contextSelection: vscode.Uri, uris: vscode.Uri[]) => {
+			try {
+				const folderPromises = uris.map(async (uri) => {
+					const stats = fs.statSync(uri.fsPath);
+					if (stats.isDirectory()) {
+						await processFolderRecursively(uri.fsPath);
+					}
+				});
+
+				await Promise.all(folderPromises);
+				vscode.window.showInformationMessage('Folders uploaded to Clarifai successfully.');
+			} catch (error) {
+				vscode.window.showErrorMessage(`Failed to upload folders to Clarifai: ${error}`);
+			}
+		})
+	);
 }
 
 
@@ -276,4 +294,23 @@ async function readImagesContentsAndPostToClarifai(imagePaths: any, relFilePath:
 			vscode.window.showErrorMessage(`Error processing ${relFilePath} : image ${imagePath} ${error}`);
         }
     }
+}
+
+async function processFolderRecursively(folderPath: string) {
+	const entries = fs.readdirSync(folderPath, { withFileTypes: true });
+
+	for (const entry of entries) {
+		const fullPath = `${folderPath}/${entry.name}`;
+		if (entry.isDirectory()) {
+			await processFolderRecursively(fullPath);
+		} else if (entry.isFile()) {
+			const ext = entry.name.split('.').pop()?.toLowerCase();
+			if (ext && ['jpeg', 'jpg', 'png', 'gif', 'bmp'].includes(ext)) {
+				await readImagesContentsAndPostToClarifai([fullPath], fullPath);
+			} else if (ext && ['yml', 'yaml', 'py', 'go', 'js', 'ts'].includes(ext)) {
+				const textContent = fs.readFileSync(fullPath, 'utf-8');
+				await sendTextToClarifai(fullPath, textContent);
+			}
+		}
+	}
 }

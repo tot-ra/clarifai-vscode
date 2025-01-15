@@ -78,6 +78,11 @@
 				"command": "clarifai.addTextToClarifai",
 				"category": "Clarifai",
 				"title": "Upload Text to Clarifai"
+			},
+			{
+				"command": "clarifai.uploadFolderToClarifai",
+				"category": "Clarifai",
+				"title": "Upload Folder to Clarifai"
 			}
 		],
 		"menus": {
@@ -93,13 +98,16 @@
 					"command": "clarifai.addImageToClarifai",
 					"group": "navigation",
 					"when": "resourceExtname == .jpeg || resourceExtname == .jpg || resourceExtname == .png || resourceExtname == .gif || resourceExtname == .bmp"
-				}
-			],
-			"explorer/context": [
+				},
 				{
 					"command": "clarifai.addTextToClarifai",
 					"group": "navigation",
 					"when": "resourceExtname == .yml || resourceExtname == .yaml || resourceExtname == .py || resourceExtname == .go || resourceExtname == .js || resourceExtname == .ts"
+				},
+				{
+					"command": "clarifai.uploadFolderToClarifai",
+					"group": "navigation",
+					"when": "explorerResourceIsFolder"
 				}
 			]
 		}
