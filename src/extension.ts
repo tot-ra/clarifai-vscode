@@ -1,10 +1,36 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import { EventEmitter } from 'events';
 
 // Extracted constants
 const CLARIFAI_API_URL = "https://api.clarifai.com/v2/inputs";
 const IMAGE_EXTENSIONS = ['jpeg', 'jpg', 'png', 'gif', 'bmp'];
 const TEXT_EXTENSIONS = ['yml', 'yaml', 'py', 'go', 'js', 'ts'];
+
+class UploadQueue extends EventEmitter {
+	private queue: string[] = [];
+
+	add(filePath: string) {
+		this.queue.push(filePath);
+		this.emit('update', this.queue.slice(0, 100)); // Emit only the top 100 files
+	}
+
+	remove(filePath: string) {
+		this.queue = this.queue.filter(file => file !== filePath);
+		this.emit('update', this.queue.slice(0, 100));
+	}
+
+	getQueue() {
+		return this.queue.slice(0, 100);
+	}
+
+	clear() {
+		this.queue = [];
+		this.emit('update', this.queue);
+	}
+}
+
+const uploadQueue = new UploadQueue();
 
 export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
@@ -18,19 +44,14 @@ export function activate(context: vscode.ExtensionContext) {
 	  );
 	
 
-	const provider = new ColorsViewProvider(context.extensionUri);
+	const provider = new ClarifaiViewProvider(context.extensionUri);
 
 	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider(ColorsViewProvider.viewType, provider));
+		vscode.window.registerWebviewViewProvider(ClarifaiViewProvider.viewType, provider));
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand('calicoColors.addColor', () => {
-			provider.addColor();
-		}));
-
-	context.subscriptions.push(
-		vscode.commands.registerCommand('calicoColors.clearColors', () => {
-			provider.clearColors();
+		vscode.commands.registerCommand('clarifai.addColor', () => {
+			provider.cancelUploads();
 		}));
 
 	context.subscriptions.push(
@@ -93,11 +114,21 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		})
 	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('clarifai.clearColors', () => {
+			provider.cancelUploads();
+		})
+	);
+
+	uploadQueue.on('update', (queue) => {
+		provider.updateQueue(queue);
+	});
 }
 
 
-class ColorsViewProvider implements vscode.WebviewViewProvider {
-	public static readonly viewType = 'calicoColors.colorsView';
+class ClarifaiViewProvider implements vscode.WebviewViewProvider {
+	public static readonly viewType = 'clarifai.colorsView';
 
 	private _view?: vscode.WebviewView;
 
@@ -134,16 +165,16 @@ class ColorsViewProvider implements vscode.WebviewViewProvider {
 		});
 	}
 
-	public addColor() {
+	public cancelUploads() {
 		if (this._view) {
-			this._view.show?.(true); // `show` is not implemented in 1.49 but is for 1.50 insiders
-			this._view.webview.postMessage({ type: 'addColor' });
+			uploadQueue.clear();
+			vscode.window.showInformationMessage('All uploads canceled and queue cleared.');
 		}
 	}
 
-	public clearColors() {
+	public updateQueue(queue: string[]) {
 		if (this._view) {
-			this._view.webview.postMessage({ type: 'clearColors' });
+			this._view.webview.postMessage({ type: 'updateQueue', queue });
 		}
 	}
 
@@ -176,14 +207,20 @@ class ColorsViewProvider implements vscode.WebviewViewProvider {
 				<link href="${styleResetUri}" rel="stylesheet">
 				<link href="${styleVSCodeUri}" rel="stylesheet">
 				<link href="${styleMainUri}" rel="stylesheet">
-
-				<title>Cat Colors</title>
 			</head>
 			<body>
-				<ul class="color-list">
-				</ul>
 
-				<button class="add-color-button">Add Color</button>
+				<textarea id="rag" style="width: 400px; height: 300px;" placeholder="Explain this file"></textarea>
+				<br/>
+				<button>Search</button>
+				
+				<h1>${uploadQueue.getQueue().length}</h1>
+
+				${uploadQueue.getQueue().length > 0 ? '<button class="cancel-uploads-button">Cancel uploads</button>' : ''}
+
+				<div class="upload-queue">
+					${uploadQueue.getQueue().map(file => `<div>${file}</div>`).join('')}
+				</div>
 
 				<script nonce="${nonce}" src="${scriptUri}"></script>
 			</body>
@@ -204,6 +241,7 @@ function getNonce() {
 
 // Function to send data to Clarifai
 async function sendTextToClarifai (filepath: any, text: any) {
+	uploadQueue.add(filepath);
     const config = vscode.workspace.getConfiguration('clarifai-vscode');
     const userId = config.get('USER_ID');
     const appId = config.get('APP_ID');
@@ -248,67 +286,84 @@ async function sendTextToClarifai (filepath: any, text: any) {
 
     // sleep 100ms to not overwhelm the API
     await new Promise(r => setTimeout(r, 100));
+
+	uploadQueue.remove(filepath);
 };
 
 
 
 async function readImagesContentsAndPostToClarifai(imagePaths: any, relFilePath: any) {
-    const config = vscode.workspace.getConfiguration('clarifai-vscode');
-    const pat = config.get('PAT');
+	for (const imagePath of imagePaths) {
+		uploadQueue.add(imagePath);
+		const config = vscode.workspace.getConfiguration('clarifai-vscode');
+		const pat = config.get('PAT');
 
-    for (const imagePath of imagePaths) {
-        try {
-            const raw: any = {
-                "inputs": [
-                    {
-                        "data": {
-                            metadata: {
-                                "filepath": imagePath
-                            }
-                        }
-                    }
-                ],
-            };
+		try {
+			const raw: any = {
+				"inputs": [
+					{
+						"data": {
+							metadata: {
+								"filepath": imagePath
+							}
+						}
+					}
+				],
+			};
 
-            const imageData = fs.readFileSync(imagePath, { encoding: 'base64' });
+			const imageData = fs.readFileSync(imagePath, { encoding: 'base64' });
 
-            const imageId = require('crypto').createHash('md5')
-                .update(fs.readFileSync(imagePath))
-                .digest('hex');
+			const imageId = require('crypto').createHash('md5')
+				.update(fs.readFileSync(imagePath))
+				.digest('hex');
 
-            raw.inputs[0].id = imageId; // Use imageId instead of docId
-            raw.inputs[0].data.image = {
-                base64: imageData
-            };
+			raw.inputs[0].id = imageId; // Use imageId instead of docId
+			raw.inputs[0].data.image = {
+				base64: imageData
+			};
 
-            const requestOptions = {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Authorization': 'Key ' + pat
-                },
-                body: JSON.stringify(raw)
-            };
+			const requestOptions = {
+				method: 'POST',
+				headers: {
+					'Accept': 'application/json',
+					'Authorization': 'Key ' + pat
+				},
+				body: JSON.stringify(raw)
+			};
 
-            const response = await fetch(CLARIFAI_API_URL, requestOptions);
-            const result = await response.json();
+			const response = await fetch(CLARIFAI_API_URL, requestOptions);
+			const result = await response.json();
 
 			// @ts-ignore
 			vscode.window.showInformationMessage(result?.status?.details);
-        } catch (error) {
+		} catch (error) {
 			vscode.window.showErrorMessage(`Error processing ${relFilePath} : image ${imagePath} ${error}`);
-        }
-    }
+		} finally {
+			uploadQueue.remove(imagePath);
+		}
+	}
 }
 
 async function processFolderRecursively(folderPath: string) {
 	const entries = fs.readdirSync(folderPath, { withFileTypes: true });
 
+	// First, add all files to the queue
 	for (const entry of entries) {
 		const fullPath = `${folderPath}/${entry.name}`;
 		if (entry.isDirectory()) {
 			await processFolderRecursively(fullPath);
 		} else if (entry.isFile()) {
+			const ext = entry.name.split('.').pop()?.toLowerCase();
+			if (ext && (IMAGE_EXTENSIONS.includes(ext) || TEXT_EXTENSIONS.includes(ext))) {
+				uploadQueue.add(fullPath);
+			}
+		}
+	}
+
+	// Then, process each file for upload
+	for (const entry of entries) {
+		const fullPath = `${folderPath}/${entry.name}`;
+		if (entry.isFile()) {
 			const ext = entry.name.split('.').pop()?.toLowerCase();
 			if (ext && IMAGE_EXTENSIONS.includes(ext)) {
 				await readImagesContentsAndPostToClarifai([fullPath], fullPath);

@@ -49,7 +49,7 @@
       "clarifai-vscode-activitybar": [
         {
           "type": "webview",
-					"id": "calicoColors.colorsView",
+					"id": "clarifai.colorsView",
 
           "name": "Clarifai Sidebar",
           "icon": "resources/clarifai-icon.svg",
@@ -59,15 +59,9 @@
 		},
 		"commands": [
 			{
-				"command": "calicoColors.addColor",
+				"command": "clarifai.addColor",
 				"category": "Calico Colors",
 				"title": "Add Color"
-			},
-			{
-				"command": "calicoColors.clearColors",
-				"category": "Calico Colors",
-				"title": "Clear Colors",
-				"icon": "$(clear-all)"
 			},
 			{
 				"command": "clarifai.addImageToClarifai",
@@ -86,13 +80,6 @@
 			}
 		],
 		"menus": {
-			"view/title": [
-				{
-					"command": "calicoColors.clearColors",
-					"group": "navigation",
-					"when": "view == calicoColors.colorsView"
-				}
-			],
 			"explorer/context": [
 				{
 					"command": "clarifai.addImageToClarifai",
