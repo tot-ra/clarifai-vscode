@@ -11,9 +11,7 @@ class UploadQueue extends EventEmitter {
 	private queue: string[] = [];
 
 	add(filePath: string) {
-		// Convert the file path to a relative path before adding to the queue
-		const relativeFilePath = vscode.workspace.asRelativePath(filePath);
-		this.queue.push(relativeFilePath);
+		this.queue.push(filePath);
 		this.emit('update', this.queue); // Emit the entire queue
 	}
 
@@ -110,7 +108,7 @@ export function activate(context: vscode.ExtensionContext) {
 				});
 
 				await Promise.all(folderPromises);
-				await processQueuedFiles();
+
 				vscode.window.showInformationMessage('Folders uploaded to Clarifai successfully.');
 			} catch (error) {
 				vscode.window.showErrorMessage(`Failed to upload folders to Clarifai: ${error}`);
@@ -126,6 +124,11 @@ export function activate(context: vscode.ExtensionContext) {
 
 	uploadQueue.on('update', (queue) => {
 		provider.updateQueue(queue);
+	});
+
+	// Start continuous processing of queued files
+	processQueuedFilesContinuously().catch(error => {
+		console.error('Error in continuous file processing:', error);
 	});
 }
 
@@ -218,12 +221,17 @@ class ClarifaiViewProvider implements vscode.WebviewViewProvider {
 				<br/>
 				<button>Search</button>
 				
-				<h1>${uploadQueue.getQueue().length}</h1>
+				<h1>Upload queue:${uploadQueue.getQueue().length}</h1>
 
 				${uploadQueue.getQueue().length > 0 ? '<button class="cancel-uploads-button">Cancel uploads</button>' : ''}
 
-				<div class="upload-queue">
-					${uploadQueue.getQueue().map(file => `<div>${file}</div>`).join('')}
+				<div class="upload-queue" style="font-size: 10px;">
+					${uploadQueue.getQueue().map(filePath => {
+						// Convert the file path to a relative path before adding to the queue
+						const relativeFilePath = vscode.workspace.asRelativePath(filePath);
+						return `<div>${relativeFilePath}</div>`
+
+					}).join('')}
 				</div>
 
 				<script nonce="${nonce}" src="${scriptUri}"></script>
@@ -359,9 +367,9 @@ async function traverseAndQueueFiles(folderPath: string) {
 			const ext = entry.name.split('.').pop()?.toLowerCase();
 			if (ext && (IMAGE_EXTENSIONS.includes(ext) || TEXT_EXTENSIONS.includes(ext))) {
 				// slow down the queue is too large
-				if (uploadQueue.getQueue().length >= 500) {
-					console.log('Queue size is 500 or more, pausing traversal...');
-					await new Promise(resolve => setTimeout(resolve, 5000)); // Sleep for 5 seconds
+				if (uploadQueue.getQueue().length >= 100) {
+					console.log('Queue size is 10 or more, pausing traversal...');
+					await new Promise(resolve => setTimeout(resolve, 1000)); // Sleep for 5 seconds
 				}
 
 				uploadQueue.add(fullPath);
@@ -371,17 +379,32 @@ async function traverseAndQueueFiles(folderPath: string) {
 	}
 }
 
-async function processQueuedFiles() {
-	const queue = uploadQueue.getQueue();
-	console.log(`Processing queue: ${queue.length} files`);
+async function processQueuedFilesContinuously() {
+	while (true) {
+		const queue = uploadQueue.getQueue();
+		console.log(`Processing queue: ${queue.length} files`);
 
-	for (const filePath of queue) {
-		const ext = filePath.split('.').pop()?.toLowerCase();
-		if (ext && IMAGE_EXTENSIONS.includes(ext)) {
-			await readImagesContentsAndPostToClarifai([filePath], filePath);
-		} else if (ext && TEXT_EXTENSIONS.includes(ext)) {
-			const textContent = fs.readFileSync(filePath, 'utf-8');
-			await sendTextToClarifai(filePath, textContent);
+		for (const filePath of queue) {
+			const ext = filePath.split('.').pop()?.toLowerCase();
+			if (ext && IMAGE_EXTENSIONS.includes(ext)) {
+				try {
+					await readImagesContentsAndPostToClarifai([filePath], filePath);
+				} catch (error) {
+					console.error(`Failed to upload image ${filePath}: ${error}`);
+				}
+			} else if (ext && TEXT_EXTENSIONS.includes(ext)) {
+				try {
+					const textContent = fs.readFileSync(filePath, 'utf-8');
+					await sendTextToClarifai(filePath, textContent);
+				} catch (error) {
+					console.error(`Failed to upload text ${filePath}: ${error}`);
+				}
+			} else {
+				console.warn(`Unsupported file type for ${filePath}`);
+			}
 		}
+
+		// Sleep for a short period before checking the queue again
+		await new Promise(resolve => setTimeout(resolve, 2000)); // 5 seconds delay
 	}
 }
