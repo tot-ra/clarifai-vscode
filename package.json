@@ -33,6 +33,11 @@
           "type": "string",
           "default": "",
           "description": "User id in Clarifai"
+        },
+        "clarifai-vscode.LLM_PAT": {
+          "type": "string",
+          "default": "",
+          "description": "API token for accessing the LLM API"
         }
       }
     },

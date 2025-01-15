@@ -1,3 +1,5 @@
+const vscode = acquireVsCodeApi();
+
 window.addEventListener('message', event => {
 	const message = event.data;
 	switch (message.type) {
@@ -22,10 +24,28 @@ window.addEventListener('message', event => {
 				cancelButton.style.display = 'none';
 			}
 			break;
+		case 'displayResponse':
+			// Update the responseText div with the response
+			document.getElementById('responseText').textContent = message.response;
+			break;
 		// existing cases...
 	}
 }); 
 
 document.querySelector('.cancel-uploads-button').addEventListener('click', () => {
-	// Existing functionality for the button
+	vscode.postMessage({
+		type: 'cancelUploads'
+	});
+}); 
+
+// Add event listener for the search button
+document.querySelector('button').addEventListener('click', () => {
+	const textarea = document.getElementById('rag');
+	const rawText = textarea.value;
+
+	// Send the rawText to the extension
+	vscode.postMessage({
+		type: 'searchClarifai',
+		rawText: rawText
+	});
 }); 

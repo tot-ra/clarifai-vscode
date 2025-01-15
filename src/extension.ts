@@ -160,13 +160,28 @@ class ClarifaiViewProvider implements vscode.WebviewViewProvider {
 
 		webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-		webviewView.webview.onDidReceiveMessage(data => {
+		webviewView.webview.onDidReceiveMessage(async data => {
 			switch (data.type) {
 				case 'colorSelected':
 					{
 						vscode.window.activeTextEditor?.insertSnippet(new vscode.SnippetString(`#${data.value}`));
 						break;
 					}
+				case 'searchClarifai':
+					const rawText = data.rawText;
+					try {
+						const response = await questionClarifai(rawText);
+						vscode.window.showInformationMessage(`Clarifai response: ${response}`);
+						
+						// Send the response back to the webview
+						this._view?.webview.postMessage({ type: 'displayResponse', response });
+					} catch (error) {
+						vscode.window.showErrorMessage(`Failed to query Clarifai: ${error}`);
+					}
+					break;
+				case 'cancelUploads':
+					this.cancelUploads();
+					break;
 			}
 		});
 	}
@@ -219,11 +234,12 @@ class ClarifaiViewProvider implements vscode.WebviewViewProvider {
 
 				<textarea id="rag" style="width: 400px; height: 300px;" placeholder="Explain this file"></textarea>
 				<br/>
-				<button>Search</button>
+				<button id="searchButton">Search</button>
 				
-				<h1>Upload queue:${uploadQueue.getQueue().length}</h1>
+				<button class="cancel-uploads-button">Cancel uploads</button>
 
-				${uploadQueue.getQueue().length > 0 ? '<button class="cancel-uploads-button">Cancel uploads</button>' : ''}
+				<!-- New element to display the response -->
+				<div id="responseText" style="margin-top: 10px; font-size: 12px; color: #333;"></div>
 
 				<div class="upload-queue" style="font-size: 10px;">
 					${uploadQueue.getQueue().map(filePath => {
@@ -407,4 +423,50 @@ async function processQueuedFilesContinuously() {
 		// Sleep for a short period before checking the queue again
 		await new Promise(resolve => setTimeout(resolve, 2000)); // 5 seconds delay
 	}
+}
+
+async function questionClarifai(rawText: string) {
+	const modelId = 'claude-3_5-sonnet';
+
+	const config = vscode.workspace.getConfiguration('clarifai-vscode');
+    const llm_pat = config.get('LLM_PAT');
+
+	const raw = JSON.stringify({
+		"user_app_id": {
+			"user_id": 'anthropic',
+			"app_id": 'completion'
+		},
+		"inputs": [
+			{
+				"data": {
+					"text": {
+						"raw": rawText
+					}
+				}
+			}
+		]
+	});
+
+	const requestOptions = {
+		method: 'POST',
+		headers: {
+			'Accept': 'application/json',
+			'Authorization': 'Key ' + llm_pat
+		},
+		body: raw
+	};
+
+	const response = await fetch("https://api.clarifai.com/v2/models/" + modelId + "/outputs", requestOptions);
+	// @ts-ignore
+	const clarifaiData: { status: { code: number }; outputs: any[] } = await response.json();
+
+	if (clarifaiData?.status?.code !== 10000) {
+		console.error("Unexpected response code", clarifaiData.status);
+		return;
+	}
+
+	console.log("clarifai response:", clarifaiData);
+	const clarifaiResponse = clarifaiData.outputs[0].data.text.raw;
+
+	return clarifaiResponse;
 }
