@@ -2,14 +2,23 @@
 
 This is a hackathon project to build vscode extension that allows integration with Clarifai
 
-## Ideas
-- add images Clarifai
+
+
+## Features
+- selectively add your files to Clarifai inputs without leaving your IDE or writing custom scripts
+    - upload images Clarifai
+    - upload text to Clarifai
+    - upload folder recursively with its files to Clarifai
+    - queue files / show queue
 ![](./docs/add-images.png)
 
+- run LLM prompt with currently open file
 
-- selectively add your files to Clarifai inputs without leaving your IDE or writing custom scripts
+## Ideas for the future
+- Cosmetics
+    - use IDE's progress bar
+    - use collapsable views and more native textareas / buttons
 - simplistic labeling from within the IDE
-- run code similarity search
 - run RAG with any LLM from Clarifai arsenal to answer questions about your repository
     - load as much as possible from selected file into the context
         - use filesystem and recursive import statements to prioritize which files need to be added into context
