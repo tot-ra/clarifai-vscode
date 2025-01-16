@@ -1,6 +1,6 @@
 # 🌀 clarifai-vscode
 
-This is a hackathon project to build vscode extension that allows integration with Clarifai
+This is a hackathon project to build vscode extension that allows integration with [Clarifai](https://www.clarifai.com/)
 
 
 
