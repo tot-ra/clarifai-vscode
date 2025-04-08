@@ -1,3 +1,5 @@
+![image](https://github.com/user-attachments/assets/9697b203-07b2-4f74-9cb4-0bea5c886f09)
+
 # 🌀 clarifai-vscode
 
 This is a hackathon project to build vscode extension that allows integration with [Clarifai](https://www.clarifai.com/)
